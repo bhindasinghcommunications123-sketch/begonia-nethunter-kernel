@@ -23,7 +23,7 @@ env:
 jobs:
   build:
     name: Build NetHunter Kernel for begonia
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -110,6 +110,63 @@ jobs:
             STRIP=llvm-strip \
             -j$(nproc)
 
+      - name: Clone RTL8821CU driver (morrownr)
+        run: |
+          git clone --depth=1 \
+            https://github.com/morrownr/8821cu-20210916.git \
+            rtl8821cu
+
+      - name: Build RTL8821CU driver (out-of-tree module)
+        run: |
+          cd rtl8821cu
+
+          export PATH="${{ github.workspace }}/clang-crDroid/bin:$PATH"
+
+          make \
+            ARCH=arm64 \
+            CROSS_COMPILE=aarch64-linux-gnu- \
+            KSRC=${{ github.workspace }}/out \
+            CC=clang \
+            LD=ld.lld \
+            LLVM=1 LLVM_IAS=1 \
+            AR=llvm-ar NM=llvm-nm \
+            OBJCOPY=llvm-objcopy OBJDUMP=llvm-objdump \
+            STRIP=llvm-strip \
+            CONFIG_PLATFORM_AUTODETECT=n \
+            CONFIG_PLATFORM_I386_PC=n \
+            CONFIG_WIFI_MONITOR=y \
+            CONFIG_AP_MODE=y \
+            CONFIG_RTL8821C=y \
+            CONFIG_USB_HCI=y \
+            -j$(nproc) 2>&1 | tail -50
+
+          if [ -f "8821cu.ko" ]; then
+            echo "SUCCESS: 8821cu.ko built"
+            file 8821cu.ko
+          else
+            echo "FAILED: 8821cu.ko not found"
+            echo "--- Attempting fallback with GCC ---"
+            make clean || true
+            make \
+              ARCH=arm64 \
+              CROSS_COMPILE=aarch64-linux-gnu- \
+              KSRC=${{ github.workspace }}/out \
+              CONFIG_PLATFORM_AUTODETECT=n \
+              CONFIG_PLATFORM_I386_PC=n \
+              CONFIG_WIFI_MONITOR=y \
+              CONFIG_AP_MODE=y \
+              CONFIG_RTL8821C=y \
+              CONFIG_USB_HCI=y \
+              -j$(nproc) 2>&1 | tail -50
+
+            if [ -f "8821cu.ko" ]; then
+              echo "SUCCESS (GCC fallback): 8821cu.ko built"
+              file 8821cu.ko
+            else
+              echo "FAILED: 8821cu.ko could not be built"
+            fi
+          fi
+
       - name: Clone MT7603U vendor driver
         run: |
           git clone --depth=1 --branch pub-test-v20220304 \
@@ -119,10 +176,8 @@ jobs:
       - name: Build MT7603U vendor driver
         run: |
           cd mt7603u-driver
-          # Use Makefile targets which set required env vars (RT28xx_DIR, CHIPSET)
           make build_tools
           echo "Host tools built, now building kernel module..."
-          # Build the kernel module against the built kernel
           make LINUX KSRC=${{ env.OUT_DIR }} \
             ARCH=arm64 \
             CROSS_COMPILE=aarch64-linux-gnu- \
@@ -149,11 +204,9 @@ jobs:
             echo "Including MT7603U vendor driver module..."
             mkdir -p AnyKernel3/modules
             cp mt7603u-driver/os/linux/mt7603usta.ko AnyKernel3/modules/
-            # Copy firmware files
             if [ -d "mt7603u-driver/mt7603_firmware" ]; then
               cp mt7603u-driver/mt7603_firmware/* AnyKernel3/modules/ 2>/dev/null || true
             fi
-            # Create install script line by line (avoid heredoc in YAML)
             echo '#!/system/bin/sh' > AnyKernel3/modules/install-mt7603u.sh
             echo 'MODDIR="$(dirname "$(readlink -f "$0")")"' >> AnyKernel3/modules/install-mt7603u.sh
             echo '' >> AnyKernel3/modules/install-mt7603u.sh
@@ -174,6 +227,31 @@ jobs:
             chmod +x AnyKernel3/modules/install-mt7603u.sh
           else
             echo "MT7603U vendor module not found, kernel only"
+          fi
+
+          # Include RTL8821CU driver module if built
+          if [ -f "rtl8821cu/8821cu.ko" ]; then
+            echo "Including RTL8821CU driver module..."
+            mkdir -p AnyKernel3/modules
+            cp rtl8821cu/8821cu.ko AnyKernel3/modules/
+            echo '#!/system/bin/sh' > AnyKernel3/modules/install-8821cu.sh
+            echo 'MODDIR="$(dirname "$(readlink -f "$0")")"' >> AnyKernel3/modules/install-8821cu.sh
+            echo '' >> AnyKernel3/modules/install-8821cu.sh
+            echo 'mount -o remount,rw / 2>/dev/null || true' >> AnyKernel3/modules/install-8821cu.sh
+            echo 'insmod "$MODDIR"/8821cu.ko' >> AnyKernel3/modules/install-8821cu.sh
+            echo '' >> AnyKernel3/modules/install-8821cu.sh
+            echo 'if lsmod | grep -q 8821cu; then' >> AnyKernel3/modules/install-8821cu.sh
+            echo '  echo "RTL8821CU driver loaded successfully"' >> AnyKernel3/modules/install-8821cu.sh
+            echo '  echo "Supports: RTL8811CU / RTL8821CU / RTL8822CU"' >> AnyKernel3/modules/install-8821cu.sh
+            echo '  echo "Monitor mode supported"' >> AnyKernel3/modules/install-8821cu.sh
+            echo '  echo "Interface name:"' >> AnyKernel3/modules/install-8821cu.sh
+            echo '  iw dev 2>/dev/null || true' >> AnyKernel3/modules/install-8821cu.sh
+            echo 'else' >> AnyKernel3/modules/install-8821cu.sh
+            echo '  echo "Failed to load RTL8821CU driver"' >> AnyKernel3/modules/install-8821cu.sh
+            echo 'fi' >> AnyKernel3/modules/install-8821cu.sh
+            chmod +x AnyKernel3/modules/install-8821cu.sh
+          else
+            echo "WARNING: RTL8821CU module not found, skipping"
           fi
 
           cd AnyKernel3
