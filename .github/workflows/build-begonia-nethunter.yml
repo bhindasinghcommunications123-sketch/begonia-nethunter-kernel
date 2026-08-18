@@ -118,6 +118,14 @@ jobs:
             https://github.com/ulli-kroll/rtl8821cu.git \
             rtl8821cu
 
+      - name: Apply monitor injection fix to RTL8811CU/8821CU driver
+        run: |
+          cd rtl8821cu
+          patch -p1 --ignore-whitespace --forward < ${{ github.workspace }}/rtl8821cu-monitor-injection.patch
+          echo "--- verifying patch applied ---"
+          grep -n "cfg80211_rtw_get_channel" os_dep/linux/ioctl_cfg80211.c | head -5
+          grep -n "all management frames" os_dep/linux/ioctl_cfg80211.c | head -3
+
       - name: Build RTL8811CU/8821CU driver (out-of-tree module)
         run: |
           cd rtl8821cu

@@ -39,12 +39,12 @@ isDerp() {
 }
 
 # Initialize block
-block=/dev/block/bootdevice/by-name/boot;
+BLOCK=/dev/block/bootdevice/by-name/boot;
 
 if isTimRom; then
-    block=boot;
-    is_slot_device=auto;
-    ramdisk_compression=none;
+    BLOCK=boot;
+    IS_SLOT_DEVICE=auto;
+    RAMDISK_COMPRESSION=none;
 
     . tools/ak3-core.sh;
 
@@ -58,18 +58,18 @@ if isTimRom; then
 
 elif isDerp; then
 
-    block=/dev/block/by-name/boot;
-    is_slot_device=0;
-    ramdisk_compression=auto;
-    no_block_display=true;
+    BLOCK=/dev/block/by-name/boot;
+    IS_SLOT_DEVICE=0;
+    RAMDISK_COMPRESSION=auto;
+    NO_BLOCK_DISPLAY=true;
 
     . tools/ak3-core.sh;
 
     mount -o rw,remount -t auto /vendor >/dev/null;
     restore_file /vendor/etc/init/hw/init.target.rc;
 
-    rm -rf $ramdisk/overlay;
-    rm -rf $ramdisk/overlay.d;
+    rm -rf $RAMDISK/overlay;
+    rm -rf $RAMDISK/overlay.d;
 
     ui_print " Custom ROM recognition: DerpFest's detected ";
     ui_print " Executing NoVA flash....";
@@ -79,17 +79,17 @@ elif isDerp; then
 
 else
 
-    is_slot_device=0;
-    ramdisk_compression=auto;
-    no_block_display=true;
+    IS_SLOT_DEVICE=0;
+    RAMDISK_COMPRESSION=auto;
+    NO_BLOCK_DISPLAY=true;
 
     . tools/ak3-core.sh;
 
     mount -o rw,remount -t auto /vendor >/dev/null;
     restore_file /vendor/etc/init/hw/init.target.rc;
 
-    rm -rf $ramdisk/overlay;
-    rm -rf $ramdisk/overlay.d;
+    rm -rf $RAMDISK/overlay;
+    rm -rf $RAMDISK/overlay.d;
 
     ui_print " Executing NoVA flash....";
 
