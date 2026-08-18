@@ -127,10 +127,8 @@ jobs:
             CROSS_COMPILE=aarch64-linux-gnu- \
             CROSS_COMPILE_ARM32=arm-linux-gnueabi- \
             KSRC=${{ github.workspace }}/out \
-            CONFIG_PLATFORM_I386_PC=n \
             CONFIG_WIFI_MONITOR=y \
             CONFIG_AP_MODE=y \
-            CONFIG_EFUSE_CONFIG_FILE=n \
             -j$(nproc) 2>&1 | tail -50
 
           if [ -f "rtl8821cu.ko" ]; then
