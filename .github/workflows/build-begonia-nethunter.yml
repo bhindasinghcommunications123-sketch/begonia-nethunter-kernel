@@ -62,7 +62,9 @@ jobs:
       - name: Clone AnyKernel3
         run: |
           git clone --depth=1 \
-            https://github.com/Wahid7852/AnyKernel AnyKernel3
+            https://github.com/osm0sis/AnyKernel3 AnyKernel3
+          # Overlay begonia-specific anykernel.sh
+          cp ${{ github.workspace }}/anykernel-begonia.sh AnyKernel3/anykernel.sh
 
       - name: Get toolchain (crDroid Clang r547379)
         run: |
@@ -110,61 +112,33 @@ jobs:
             STRIP=llvm-strip \
             -j$(nproc)
 
-      - name: Clone RTL8821CU driver (morrownr)
+      - name: Clone RTL8811CU/8821CU driver (ulli-kroll, kernel 4.14 compatible)
         run: |
           git clone --depth=1 \
-            https://github.com/morrownr/8821cu-20210916.git \
+            https://github.com/ulli-kroll/rtl8821cu.git \
             rtl8821cu
 
-      - name: Build RTL8821CU driver (out-of-tree module)
+      - name: Build RTL8811CU/8821CU driver (out-of-tree module)
         run: |
           cd rtl8821cu
-
-          export PATH="${{ github.workspace }}/clang-crDroid/bin:$PATH"
 
           make \
             ARCH=arm64 \
             CROSS_COMPILE=aarch64-linux-gnu- \
             KSRC=${{ github.workspace }}/out \
-            CC=clang \
-            LD=ld.lld \
-            LLVM=1 LLVM_IAS=1 \
-            AR=llvm-ar NM=llvm-nm \
-            OBJCOPY=llvm-objcopy OBJDUMP=llvm-objdump \
-            STRIP=llvm-strip \
-            CONFIG_PLATFORM_AUTODETECT=n \
             CONFIG_PLATFORM_I386_PC=n \
             CONFIG_WIFI_MONITOR=y \
             CONFIG_AP_MODE=y \
-            CONFIG_RTL8821C=y \
-            CONFIG_USB_HCI=y \
             -j$(nproc) 2>&1 | tail -50
 
-          if [ -f "8821cu.ko" ]; then
-            echo "SUCCESS: 8821cu.ko built"
-            file 8821cu.ko
+          if [ -f "rtl8821cu.ko" ]; then
+            echo "SUCCESS: rtl8821cu.ko built"
+            file rtl8821cu.ko
           else
-            echo "FAILED: 8821cu.ko not found"
-            echo "--- Attempting fallback with GCC ---"
-            make clean || true
-            make \
-              ARCH=arm64 \
-              CROSS_COMPILE=aarch64-linux-gnu- \
-              KSRC=${{ github.workspace }}/out \
-              CONFIG_PLATFORM_AUTODETECT=n \
-              CONFIG_PLATFORM_I386_PC=n \
-              CONFIG_WIFI_MONITOR=y \
-              CONFIG_AP_MODE=y \
-              CONFIG_RTL8821C=y \
-              CONFIG_USB_HCI=y \
-              -j$(nproc) 2>&1 | tail -50
-
-            if [ -f "8821cu.ko" ]; then
-              echo "SUCCESS (GCC fallback): 8821cu.ko built"
-              file 8821cu.ko
-            else
-              echo "FAILED: 8821cu.ko could not be built"
-            fi
+            echo "FAILED: rtl8821cu.ko not found"
+            echo "--- Build logs ---"
+            ls -la *.ko 2>/dev/null || true
+            echo "Device IDs supported: 0bda:c811 (RTL8811CU), 0bda:b820/b82b (RTL8821CU)"
           fi
 
       - name: Clone MT7603U vendor driver
@@ -229,29 +203,35 @@ jobs:
             echo "MT7603U vendor module not found, kernel only"
           fi
 
-          # Include RTL8821CU driver module if built
-          if [ -f "rtl8821cu/8821cu.ko" ]; then
-            echo "Including RTL8821CU driver module..."
+          # Include RTL8811CU/8821CU driver module + firmware if built
+          if [ -f "rtl8821cu/rtl8821cu.ko" ]; then
+            echo "Including RTL8811CU/8821CU driver module..."
             mkdir -p AnyKernel3/modules
-            cp rtl8821cu/8821cu.ko AnyKernel3/modules/
+            cp rtl8821cu/rtl8821cu.ko AnyKernel3/modules/
+            if [ -f "rtl8821cu/firmware/rtl8821cufw.bin" ]; then
+              cp rtl8821cu/firmware/rtl8821cufw.bin AnyKernel3/modules/
+            fi
             echo '#!/system/bin/sh' > AnyKernel3/modules/install-8821cu.sh
             echo 'MODDIR="$(dirname "$(readlink -f "$0")")"' >> AnyKernel3/modules/install-8821cu.sh
             echo '' >> AnyKernel3/modules/install-8821cu.sh
             echo 'mount -o remount,rw / 2>/dev/null || true' >> AnyKernel3/modules/install-8821cu.sh
-            echo 'insmod "$MODDIR"/8821cu.ko' >> AnyKernel3/modules/install-8821cu.sh
+            echo 'mkdir -p /lib/firmware/rtlwifi 2>/dev/null || true' >> AnyKernel3/modules/install-8821cu.sh
+            echo 'cp -f "$MODDIR"/rtl8821cufw.bin /lib/firmware/rtlwifi/ 2>/dev/null || true' >> AnyKernel3/modules/install-8821cu.sh
+            echo 'insmod "$MODDIR"/rtl8821cu.ko' >> AnyKernel3/modules/install-8821cu.sh
             echo '' >> AnyKernel3/modules/install-8821cu.sh
-            echo 'if lsmod | grep -q 8821cu; then' >> AnyKernel3/modules/install-8821cu.sh
-            echo '  echo "RTL8821CU driver loaded successfully"' >> AnyKernel3/modules/install-8821cu.sh
-            echo '  echo "Supports: RTL8811CU / RTL8821CU / RTL8822CU"' >> AnyKernel3/modules/install-8821cu.sh
-            echo '  echo "Monitor mode supported"' >> AnyKernel3/modules/install-8821cu.sh
+            echo 'if lsmod | grep -q rtl8821cu; then' >> AnyKernel3/modules/install-8821cu.sh
+            echo '  echo "RTL8811CU/8821CU driver loaded successfully"' >> AnyKernel3/modules/install-8821cu.sh
+            echo '  echo "Supported chipsets: RTL8811CU (0bda:c811), RTL8821CU (0bda:b82b)"' >> AnyKernel3/modules/install-8821cu.sh
+            echo '  echo "Monitor mode + packet injection supported"' >> AnyKernel3/modules/install-8821cu.sh
             echo '  echo "Interface name:"' >> AnyKernel3/modules/install-8821cu.sh
             echo '  iw dev 2>/dev/null || true' >> AnyKernel3/modules/install-8821cu.sh
             echo 'else' >> AnyKernel3/modules/install-8821cu.sh
             echo '  echo "Failed to load RTL8821CU driver"' >> AnyKernel3/modules/install-8821cu.sh
+            echo '  echo "Check: is the USB adapter plugged in with an OTG cable?"' >> AnyKernel3/modules/install-8821cu.sh
             echo 'fi' >> AnyKernel3/modules/install-8821cu.sh
             chmod +x AnyKernel3/modules/install-8821cu.sh
           else
-            echo "WARNING: RTL8821CU module not found, skipping"
+            echo "WARNING: RTL8811CU/8821CU module not found, skipping"
           fi
 
           cd AnyKernel3
