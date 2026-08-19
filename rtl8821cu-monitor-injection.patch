@@ -130,3 +130,20 @@ index be72f10..0f978bd 100644
  	.set_power_mgmt = cfg80211_rtw_set_power_mgmt,
  	.set_pmksa = cfg80211_rtw_set_pmksa,
  	.del_pmksa = cfg80211_rtw_del_pmksa,
+diff --git a/os_dep/linux/ioctl_linux.c b/os_dep/linux/ioctl_linux.c
+index b789944..defc9da 100644
+--- a/os_dep/linux/ioctl_linux.c
++++ b/os_dep/linux/ioctl_linux.c
+@@ -1803,9 +1803,10 @@ static int rtw_wx_get_freq(struct net_device *dev,
+ 		wrqu->freq.i = pcur_bss->Configuration.DSConfig;
+ 
+ 	} else {
+-		wrqu->freq.m = rtw_ch2freq(padapter->mlmeextpriv.cur_channel) * 100000;
++		u8 ch = rtw_get_oper_ch(padapter);
++		wrqu->freq.m = rtw_ch2freq(ch) * 100000;
+ 		wrqu->freq.e = 1;
+-		wrqu->freq.i = padapter->mlmeextpriv.cur_channel;
++		wrqu->freq.i = ch;
+ 	}
+ 
+ 	return 0;
