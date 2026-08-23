@@ -130,20 +130,67 @@ index be72f10..0f978bd 100644
  	.set_power_mgmt = cfg80211_rtw_set_power_mgmt,
  	.set_pmksa = cfg80211_rtw_set_pmksa,
  	.del_pmksa = cfg80211_rtw_del_pmksa,
+diff --git a/hal/rtl8821c/rtl8821c_ops.c b/hal/rtl8821c/rtl8821c_ops.c
+index 1dc591b..e194d5c 100644
+--- a/hal/rtl8821c/rtl8821c_ops.c
++++ b/hal/rtl8821c/rtl8821c_ops.c
+@@ -879,6 +879,9 @@ static void hw_var_set_monitor(PADAPTER Adapter, u8 *val)
+ 	/* Receive all data frames */
+ 	rtw_write16(Adapter, REG_RXFLTMAP_8821C, 0xFFFF);
+ 
++	RTW_INFO("%s: monitor RCR(0x%x)=0x%x\n", __FUNCTION__,
++		 REG_RCR_8821C, rtw_read32(Adapter, REG_RCR_8821C));
++
+ 	#if 0
+ 	/* tx pause */
+ 	rtw_write8(padapter, REG_TXPAUSE, 0xFF);
+@@ -1295,6 +1298,10 @@ static void hw_var_set_check_bssid(PADAPTER adapter, u8 enable)
+ {
+ 	u32 rcr;
+ 
++	/* In monitor mode keep CBSSID cleared so beacons from all BSSIDs are received */
++	if (check_fwstate(&adapter->mlmepriv, WIFI_MONITOR_STATE))
++		return;
++
+ 	rcr = BIT_CBSSID_DATA_8821C | BIT_CBSSID_BCN_8821C;
+ 	if (enable)
+ 		rtl8821c_rcr_add(adapter, rcr);
+@@ -1415,7 +1422,9 @@ static void hw_var_set_mlme_sitesurvey(PADAPTER adapter, u8 enable)
+ 		if (0 && MLME_IS_AP(adapter))
+ 			rcr_bit &= ~(BIT_CBSSID_BCN_8821C);
+ 
+-		rtl8821c_rcr_add(adapter, rcr_bit);
++		/* In monitor mode keep CBSSID cleared so beacons from all BSSIDs are received */
++		if (!check_fwstate(&adapter->mlmepriv, WIFI_MONITOR_STATE))
++			rtl8821c_rcr_add(adapter, rcr_bit);
+ #ifdef CONFIG_MI_WITH_MBSSID_CAM
+ 		/*if ((rtw_mi_get_assoced_sta_num(Adapter) == 1) && (!rtw_mi_check_status(Adapter, MI_AP_MODE)))
+ 			rtw_write8(Adapter, REG_BCN_CTRL, rtw_read8(Adapter, REG_BCN_CTRL)&(~DIS_TSF_UDT));*/
+@@ -1480,7 +1489,9 @@ static void hw_var_set_mlme_join(PADAPTER adapter, u8 type)
+ 			val32 = BIT_CBSSID_BCN_8821C;
+ 		else
+ 			val32 = BIT_CBSSID_DATA_8821C | BIT_CBSSID_BCN_8821C;
+-		rtl8821c_rcr_add(adapter, val32);
++		/* In monitor mode keep CBSSID cleared so beacons from all BSSIDs are received */
++		if (!check_fwstate(pmlmepriv, WIFI_MONITOR_STATE))
++			rtl8821c_rcr_add(adapter, val32);
+ #endif
+ 		hw_bcn_func(adapter, _TRUE);
+ 		if (check_fwstate(pmlmepriv, WIFI_STATION_STATE) == _TRUE)
 diff --git a/os_dep/linux/ioctl_linux.c b/os_dep/linux/ioctl_linux.c
 index b789944..defc9da 100644
 --- a/os_dep/linux/ioctl_linux.c
 +++ b/os_dep/linux/ioctl_linux.c
 @@ -1803,9 +1803,10 @@ static int rtw_wx_get_freq(struct net_device *dev,
- 		wrqu->freq.i = pcur_bss->Configuration.DSConfig;
- 
- 	} else {
+  		wrqu->freq.i = pcur_bss->Configuration.DSConfig;
+  
+  	} else {
 -		wrqu->freq.m = rtw_ch2freq(padapter->mlmeextpriv.cur_channel) * 100000;
 +		u8 ch = rtw_get_oper_ch(padapter);
 +		wrqu->freq.m = rtw_ch2freq(ch) * 100000;
- 		wrqu->freq.e = 1;
+  		wrqu->freq.e = 1;
 -		wrqu->freq.i = padapter->mlmeextpriv.cur_channel;
 +		wrqu->freq.i = ch;
- 	}
- 
- 	return 0;
+  	}
+  
+  	return 0;
