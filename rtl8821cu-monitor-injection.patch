@@ -14,20 +14,35 @@ index cbab0a3..b13b9f0 100644
  	}
  
 diff --git a/hal/rtl8821c/rtl8821c_ops.c b/hal/rtl8821c/rtl8821c_ops.c
-index 1dc591b..d45e9f6 100644
+index 1dc591b..2fa3ca2 100644
 --- a/hal/rtl8821c/rtl8821c_ops.c
 +++ b/hal/rtl8821c/rtl8821c_ops.c
-@@ -879,6 +879,9 @@ static void hw_var_set_monitor(PADAPTER Adapter, u8 *val)
- 	/* Receive all data frames */
+@@ -876,9 +876,23 @@ static void hw_var_set_monitor(PADAPTER Adapter, u8 *val)
+ 	#endif
+ 
+ 	rtl8821c_rcr_config(Adapter, rcr_bits);
+-	/* Receive all data frames */
++	/* Receive all frames: enable MGMT, CTRL, and DATA subtypes.
++	 * REG_RXFLTMAP0 (0x06A0) = MGMT frame subtype filter.
++	 * REG_RXFLTMAP1 (0x06A2) = CTRL frame subtype filter.
++	 * REG_RXFLTMAP  (0x06A4) = DATA frame subtype filter.
++	 * Default MGMT filter drops beacons (subtype 8) while passing
++	 * probe requests (subtype 4) ÔÇö must set all bits for monitor mode.
++	 */
++	rtw_write16(Adapter, REG_RXFLTMAP0_8821C, 0xFFFF);
++	rtw_write16(Adapter, REG_RXFLTMAP1_8821C, 0xFFFF);
  	rtw_write16(Adapter, REG_RXFLTMAP_8821C, 0xFFFF);
  
-+	RTW_INFO("%s: monitor RCR(0x%x)=0x%x\n", __FUNCTION__,
-+		 REG_RCR_8821C, rtw_read32(Adapter, REG_RCR_8821C));
++	RTW_INFO("%s: monitor RCR(0x%x)=0x%08x FLT_MAP0=0x%04x MAP1=0x%04x MAP=0x%04x\n",
++		 __FUNCTION__, REG_RCR_8821C, rtw_read32(Adapter, REG_RCR_8821C),
++		 rtw_read16(Adapter, REG_RXFLTMAP0_8821C),
++		 rtw_read16(Adapter, REG_RXFLTMAP1_8821C),
++		 rtw_read16(Adapter, REG_RXFLTMAP_8821C));
 +
  	#if 0
  	/* tx pause */
  	rtw_write8(padapter, REG_TXPAUSE, 0xFF);
-@@ -898,11 +901,33 @@ static void hw_var_set_opmode(PADAPTER Adapter, u8 *val)
+@@ -898,11 +912,33 @@ static void hw_var_set_opmode(PADAPTER Adapter, u8 *val)
  	}
  
  	if (mode == _HW_STATE_MONITOR_) {
@@ -61,7 +76,7 @@ index 1dc591b..d45e9f6 100644
  		return;
  	}
  
-@@ -1295,6 +1320,10 @@ static void hw_var_set_check_bssid(PADAPTER adapter, u8 enable)
+@@ -1295,6 +1331,10 @@ static void hw_var_set_check_bssid(PADAPTER adapter, u8 enable)
  {
  	u32 rcr;
  
@@ -72,7 +87,7 @@ index 1dc591b..d45e9f6 100644
  	rcr = BIT_CBSSID_DATA_8821C | BIT_CBSSID_BCN_8821C;
  	if (enable)
  		rtl8821c_rcr_add(adapter, rcr);
-@@ -1415,7 +1444,9 @@ static void hw_var_set_mlme_sitesurvey(PADAPTER adapter, u8 enable)
+@@ -1415,7 +1455,9 @@ static void hw_var_set_mlme_sitesurvey(PADAPTER adapter, u8 enable)
  		if (0 && MLME_IS_AP(adapter))
  			rcr_bit &= ~(BIT_CBSSID_BCN_8821C);
  
@@ -83,7 +98,7 @@ index 1dc591b..d45e9f6 100644
  #ifdef CONFIG_MI_WITH_MBSSID_CAM
  		/*if ((rtw_mi_get_assoced_sta_num(Adapter) == 1) && (!rtw_mi_check_status(Adapter, MI_AP_MODE)))
  			rtw_write8(Adapter, REG_BCN_CTRL, rtw_read8(Adapter, REG_BCN_CTRL)&(~DIS_TSF_UDT));*/
-@@ -1480,7 +1511,9 @@ static void hw_var_set_mlme_join(PADAPTER adapter, u8 type)
+@@ -1480,7 +1522,9 @@ static void hw_var_set_mlme_join(PADAPTER adapter, u8 type)
  			val32 = BIT_CBSSID_BCN_8821C;
  		else
  			val32 = BIT_CBSSID_DATA_8821C | BIT_CBSSID_BCN_8821C;
