@@ -95,6 +95,15 @@ jobs:
             OBJCOPY=llvm-objcopy OBJDUMP=llvm-objdump \
             STRIP=llvm-strip \
             nethunter_defconfig
+          echo "=== FORCE NetHunter Wi-Fi config ==="
+          scripts/config --enable MAC80211
+          scripts/config --enable ATH9K
+          scripts/config --enable ATH9K_HTC
+          scripts/config --enable ATH9K_COMMON
+          scripts/config --enable CFG80211
+          scripts/config --enable WLAN
+          echo "=== FINAL CONFIG CHECK ==="
+          grep -E "CONFIG_(MAC80211|ATH9K|ATH9K_HTC|ATH9K_COMMON|CFG80211|WLAN)=" ${{ env.OUT_DIR }}/.config
 
       - name: Build kernel
         run: |
